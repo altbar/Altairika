@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Виртуальная Энциклопедия — VR-образование для детей | Альтаирика</title>
+  <meta name="description" content="Групповые VR-сеансы под ключ. Помогаем детям понимать сложные темы через эффект полного погружения — безопасно и наглядно.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Onest:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --deep: #0a0118;
+      --deep-alt: #0d0629;
+      --purple: #6b3fa0;
+      --purple-light: #9d6dd7;
+      --violet: #c084fc;
+      --orange: #f59e0b;
+      --orange-glow: #fbbf24;
+      --white: #f8f5ff;
+      --white-dim: rgba(248, 245, 255, 0.7);
+      --glass: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --font-display: 'Unbounded', sans-serif;
+      --font-body: 'Onest', sans-serif;
+      --max-w: 1280px;
+      --section-pad: clamp(60px, 10vw, 120px);
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-body);
+      background: var(--deep);
+      color: var(--white);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; height: auto; display: block; }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
+
+    /* ========== ANIMATIONS ========== */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(40px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-15px); }
+    }
+    @keyframes glow {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(-60px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes countUp {
+      from { opacity: 0; transform: scale(0.5); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .reveal {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ========== HEADER ========== */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      transition: background 0.3s, backdrop-filter 0.3s;
+    }
+    .header.scrolled {
+      background: rgba(10, 1, 24, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .header .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .logo {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+    .logo span { color: var(--violet); }
+    .nav { display: flex; gap: 28px; align-items: center; }
+    .nav a {
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0.7;
+      transition: opacity 0.3s;
+      white-space: nowrap;
+    }
+    .nav a:hover { opacity: 1; }
+    .header-phone {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--white);
+      font-size: 28px;
+      cursor: pointer;
+    }
+
+    /* ========== HERO ========== */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      padding-top: 100px;
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+    .hero-bg img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(10, 1, 24, 0.3) 0%,
+        rgba(10, 1, 24, 0.5) 50%,
+        rgba(10, 1, 24, 1) 100%
+      );
+    }
+    .hero .container {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+    .hero-content { animation: fadeUp 1s ease forwards; }
+    .hero-subtitle {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--violet);
+      margin-bottom: 16px;
+    }
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(32px, 4.5vw, 56px);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+    }
+    .hero-tagline {
+      font-family: var(--font-display);
+      font-size: clamp(16px, 2vw, 22px);
+      font-weight: 500;
+      color: var(--orange-glow);
+      margin-bottom: 24px;
+    }
+    .hero-desc {
+      font-size: 17px;
+      color: var(--white-dim);
+      max-width: 500px;
+      margin-bottom: 32px;
+      line-height: 1.7;
+    }
+    .hero-stats {
+      display: flex;
+      gap: 40px;
+      margin-top: 40px;
+    }
+    .hero-stat {
+      animation: countUp 0.6s ease forwards;
+    }
+    .hero-stat-number {
+      font-family: var(--font-display);
+      font-size: clamp(28px, 3vw, 42px);
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--orange-glow), var(--violet));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-stat-label {
+      font-size: 13px;
+      color: var(--white-dim);
+      margin-top: 4px;
+    }
+    .hero-image {
+      position: relative;
+      animation: fadeUp 1s ease 0.3s both;
+    }
+    .hero-image img {
+      max-height: 600px;
+      margin: 0 auto;
+      filter: drop-shadow(0 0 60px rgba(107, 63, 160, 0.4));
+      animation: float 6s ease-in-out infinite;
+    }
+
+    /* ========== BUTTONS ========== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      border-radius: 50px;
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--purple), var(--violet));
+      color: white;
+      box-shadow: 0 4px 30px rgba(107, 63, 160, 0.4);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 40px rgba(107, 63, 160, 0.6);
+    }
+    .btn-outline {
+      background: transparent;
+      color: var(--white);
+      border: 1px solid var(--glass-border);
+    }
+    .btn-outline:hover {
+      background: var(--glass);
+      border-color: var(--violet);
+    }
+    .btn-orange {
+      background: linear-gradient(135deg, var(--orange), #ef4444);
+      color: white;
+      box-shadow: 0 4px 30px rgba(245, 158, 11, 0.3);
+    }
+    .btn-orange:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 40px rgba(245, 158, 11, 0.5);
+    }
+
+    /* ========== SECTION COMMON ========== */
+    .section {
+      padding: var(--section-pad) 0;
+      position: relative;
+    }
+    .section-label {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--violet);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(24px, 3.5vw, 44px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+    .section-desc {
+      font-size: 17px;
+      color: var(--white-dim);
+      max-width: 640px;
+      line-height: 1.7;
+    }
+    .section-header { margin-bottom: 56px; }
+
+    /* ========== WHY VR ========== */
+    .why-vr {
+      background: radial-gradient(ellipse at 20% 0%, rgba(107, 63, 160, 0.15), transparent 60%);
+    }
+    .why-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .why-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 36px 28px;
+      transition: transform 0.3s, border-color 0.3s;
+    }
+    .why-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--violet);
+    }
+    .why-card-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+    .why-card:nth-child(1) .why-card-icon { background: rgba(168, 85, 247, 0.15); }
+    .why-card:nth-child(2) .why-card-icon { background: rgba(245, 158, 11, 0.15); }
+    .why-card:nth-child(3) .why-card-icon { background: rgba(34, 197, 94, 0.15); }
+    .why-card-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .why-card-subtitle {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--orange-glow);
+      margin-bottom: 20px;
+    }
+    .checklist { list-style: none; }
+    .checklist li {
+      position: relative;
+      padding-left: 28px;
+      margin-bottom: 14px;
+      font-size: 15px;
+      color: var(--white-dim);
+      line-height: 1.5;
+    }
+    .checklist li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--violet);
+      font-weight: 700;
+    }
+
+    /* ========== STATS ========== */
+    .stats-section {
+      background: linear-gradient(135deg, rgba(107, 63, 160, 0.1), rgba(245, 158, 11, 0.05));
+      border-top: 1px solid var(--glass-border);
+      border-bottom: 1px solid var(--glass-border);
+      padding: 60px 0;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 40px;
+      text-align: center;
+    }
+    .stat-item {}
+    .stat-number {
+      font-family: var(--font-display);
+      font-size: clamp(36px, 4vw, 56px);
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--orange-glow), var(--violet));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-text {
+      font-size: 15px;
+      color: var(--white-dim);
+      margin-top: 8px;
+      max-width: 250px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ========== WHERE TO INVITE ========== */
+    .where-section {
+      background: radial-gradient(ellipse at 80% 50%, rgba(107, 63, 160, 0.1), transparent 60%);
+    }
+    .where-categories {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+    .where-category {}
+    .where-cat-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--purple);
+    }
+    .where-list { list-style: none; }
+    .where-list li {
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      font-size: 15px;
+      transition: all 0.3s;
+      cursor: default;
+    }
+    .where-list li:hover {
+      background: rgba(107, 63, 160, 0.15);
+      border-color: var(--violet);
+      transform: translateX(4px);
+    }
+
+    /* ========== ABOUT / TRUST ========== */
+    .trust-section {
+      background: radial-gradient(ellipse at 50% 100%, rgba(245, 158, 11, 0.08), transparent 60%);
+    }
+    .trust-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+    .trust-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 40px;
+    }
+    .trust-stat-number {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--orange-glow);
+    }
+    .trust-stat-label {
+      font-size: 13px;
+      color: var(--white-dim);
+      margin-top: 4px;
+    }
+    .flags-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .flag-item {
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--glass-border);
+      aspect-ratio: 3/2;
+      transition: transform 0.3s;
+    }
+    .flag-item:hover { transform: scale(1.05); }
+    .flag-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* ========== CATALOG ========== */
+    .catalog-section {
+      background: var(--deep-alt);
+    }
+    .catalog-showcase {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+    .catalog-posters {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .catalog-poster {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--glass-border);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .catalog-poster:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(107, 63, 160, 0.3);
+    }
+    .catalog-poster img {
+      width: 100%;
+      height: auto;
+    }
+    .catalog-poster.featured {
+      grid-column: span 2;
+    }
+
+    /* ========== FOR SCHOOLS / PARENTS ========== */
+    .offer-section { }
+    .offer-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
+    }
+    .offer-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 48px 36px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+    .offer-card:hover { border-color: var(--violet); }
+    .offer-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--purple), var(--violet), var(--orange));
+    }
+    .offer-card-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--violet);
+      margin-bottom: 16px;
+    }
+    .offer-card-title {
+      font-family: var(--font-display);
+      font-size: clamp(20px, 2.5vw, 28px);
+      font-weight: 800;
+      line-height: 1.2;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .offer-card-desc {
+      font-size: 15px;
+      color: var(--white-dim);
+      margin-bottom: 24px;
+      line-height: 1.7;
+    }
+
+    /* ========== APP DOWNLOAD ========== */
+    .app-section {
+      background: radial-gradient(ellipse at 30% 50%, rgba(107, 63, 160, 0.15), transparent 60%);
+    }
+    .app-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+    .app-phone {
+      position: relative;
+      text-align: center;
+    }
+    .app-phone img {
+      max-height: 500px;
+      margin: 0 auto;
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(107, 63, 160, 0.3);
+    }
+    .store-buttons {
+      display: flex;
+      gap: 16px;
+      margin-top: 32px;
+    }
+    .store-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 24px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+    .store-btn:hover {
+      background: rgba(107, 63, 160, 0.2);
+      border-color: var(--violet);
+    }
+    .store-btn svg { width: 24px; height: 24px; }
+
+    /* ========== PARTNER CTA ========== */
+    .partner-section {
+      text-align: center;
+      padding: var(--section-pad) 0;
+    }
+    .partner-card {
+      background: linear-gradient(135deg, rgba(107, 63, 160, 0.2), rgba(245, 158, 11, 0.1));
+      border: 1px solid var(--glass-border);
+      border-radius: 32px;
+      padding: 64px 48px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* ========== VIDEO ========== */
+    .video-section {
+      background: var(--deep-alt);
+    }
+    .video-placeholder {
+      position: relative;
+      border-radius: 24px;
+      overflow: hidden;
+      aspect-ratio: 16/9;
+      max-width: 900px;
+      margin: 40px auto 0;
+      border: 1px solid var(--glass-border);
+    }
+    .video-placeholder img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .video-play {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 1, 24, 0.4);
+      transition: background 0.3s;
+      cursor: pointer;
+    }
+    .video-play:hover { background: rgba(10, 1, 24, 0.2); }
+    .video-play-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: var(--purple);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 40px rgba(107, 63, 160, 0.5);
+      transition: transform 0.3s;
+    }
+    .video-play:hover .video-play-icon { transform: scale(1.1); }
+    .video-play-icon svg { width: 32px; height: 32px; fill: white; margin-left: 4px; }
+
+    /* ========== CONTACT FORM ========== */
+    .contact-section {
+      background: radial-gradient(ellipse at 50% 0%, rgba(107, 63, 160, 0.12), transparent 60%);
+    }
+    .contact-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: start;
+    }
+    .contact-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .form-field {
+      position: relative;
+    }
+    .form-field input {
+      width: 100%;
+      padding: 16px 20px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      color: var(--white);
+      font-family: var(--font-body);
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+    .form-field input::placeholder { color: rgba(248, 245, 255, 0.3); }
+    .form-field input:focus { border-color: var(--violet); }
+
+    /* ========== FOOTER ========== */
+    .footer {
+      border-top: 1px solid var(--glass-border);
+      padding: 60px 0 40px;
+      background: var(--deep);
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr repeat(4, 1fr);
+      gap: 40px;
+    }
+    .footer-brand {}
+    .footer-brand .logo { margin-bottom: 16px; }
+    .footer-brand p {
+      font-size: 14px;
+      color: var(--white-dim);
+      line-height: 1.6;
+      max-width: 280px;
+    }
+    .footer-col-title {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+    }
+    .footer-links { list-style: none; }
+    .footer-links li { margin-bottom: 10px; }
+    .footer-links a {
+      font-size: 14px;
+      color: var(--white-dim);
+      transition: color 0.3s;
+    }
+    .footer-links a:hover { color: var(--white); }
+    .footer-bottom {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--glass-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-bottom p {
+      font-size: 12px;
+      color: rgba(248, 245, 255, 0.4);
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 1024px) {
+      .hero .container { grid-template-columns: 1fr; text-align: center; }
+      .hero-desc { margin-left: auto; margin-right: auto; }
+      .hero-stats { justify-content: center; }
+      .hero-image img { max-height: 400px; }
+      .why-grid { grid-template-columns: 1fr; max-width: 500px; margin: 0 auto; }
+      .trust-content { grid-template-columns: 1fr; }
+      .catalog-showcase { grid-template-columns: 1fr; }
+      .offer-grid { grid-template-columns: 1fr; }
+      .app-content { grid-template-columns: 1fr; text-align: center; }
+      .contact-grid { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: repeat(2, 1fr); }
+      .where-categories { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .nav { display: none; }
+      .menu-toggle { display: block; }
+      .hero-stats { flex-direction: column; gap: 20px; }
+      .stats-grid { grid-template-columns: 1fr; gap: 32px; }
+      .trust-stats { grid-template-columns: repeat(2, 1fr); }
+      .flags-grid { grid-template-columns: repeat(3, 1fr); }
+      .catalog-posters { grid-template-columns: 1fr; }
+      .catalog-poster.featured { grid-column: span 1; }
+      .store-buttons { flex-direction: column; align-items: center; }
+      .footer-grid { grid-template-columns: 1fr; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header" id="header">
+    <div class="container">
+      <a href="#" class="logo">АЛЬТА<span>ИРИКА</span></a>
+      <nav class="nav">
+        <a href="#sessions">О сеансах</a>
+        <a href="#catalog">Каталог</a>
+        <a href="#about">О компании</a>
+        <a href="#partner">Партнёрство</a>
+        <a href="#contact">Контакты</a>
+      </nav>
+      <a href="tel:88005555014" class="header-phone">8 800 555-50-14</a>
+      <button class="menu-toggle" id="menuToggle" aria-label="Меню">☰</button>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero" id="hero">
+    <div class="hero-bg">
+      <img src="images/img_01.jpg" alt="" loading="eager">
+    </div>
+    <div class="container">
+      <div class="hero-content">
+        <p class="hero-subtitle">Групповые VR-сеансы под ключ</p>
+        <h1 class="hero-title">Виртуальная Энциклопедия</h1>
+        <p class="hero-tagline">вдохновляем наукой!</p>
+        <p class="hero-desc">Помогаем детям понимать сложные темы через эффект полного погружения — безопасно и наглядно.</p>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+          <a href="#contact" class="btn btn-primary">Оставить заявку</a>
+          <a href="#sessions" class="btn btn-outline">Узнать больше</a>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <div class="hero-stat-number">16</div>
+            <div class="hero-stat-label">лет опыта</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-number">5 млн</div>
+            <div class="hero-stat-label">зрителей</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-number">160+</div>
+            <div class="hero-stat-label">фильмов</div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-image">
+        <img src="images/img_05.png" alt="Мальчик в скафандре с VR-очками">
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY VR -->
+  <section class="section why-vr" id="sessions">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-label">о преимуществах технологии</p>
+        <h2 class="section-title">Почему VR помогает<br>в обучении</h2>
+      </div>
+      <div class="why-grid">
+        <!-- Children -->
+        <div class="why-card reveal reveal-delay-1">
+          <div class="why-card-icon">🎮</div>
+          <h3 class="why-card-title">Детям</h3>
+          <p class="why-card-subtitle">интересно и понятно</p>
+          <ul class="checklist">
+            <li>Обучение через впечатления, ребёнок проживает события</li>
+            <li>Сложные темы становятся наглядными и логичными</li>
+            <li>Урок запоминается как личный опыт, а не как заучивание</li>
+          </ul>
+        </div>
+        <!-- Parents -->
+        <div class="why-card reveal reveal-delay-2">
+          <div class="why-card-icon">🛡️</div>
+          <h3 class="why-card-title">Родителям</h3>
+          <p class="why-card-subtitle">безопасно и эффективно</p>
+          <ul class="checklist">
+            <li>VR-сеансы адаптированы для детей от 4 лет</li>
+            <li>Соблюдаются рекомендации по времени просмотра и нагрузке</li>
+            <li>Материал лучше усваивается</li>
+          </ul>
+        </div>
+        <!-- Teachers -->
+        <div class="why-card reveal reveal-delay-3">
+          <div class="why-card-icon">📚</div>
+          <h3 class="why-card-title">Педагогам</h3>
+          <p class="why-card-subtitle">готовая программа обучения</p>
+          <ul class="checklist">
+            <li>Актуальный контент, дополняющий школьную программу</li>
+            <li>Высокая вовлеченность, класс слушает и не отвлекается</li>
+            <li>Синхронное обучение до 60 человек одновременно</li>
+            <li>Урок проводит обученный специалист</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section class="stats-section">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-item reveal">
+          <div class="stat-number">+40%</div>
+          <p class="stat-text">повышается усвоение информации после VR-занятий</p>
+        </div>
+        <div class="stat-item reveal reveal-delay-1">
+          <div class="stat-number">+28.8%</div>
+          <p class="stat-text">отмечается рост среднего итогового балла</p>
+        </div>
+        <div class="stat-item reveal reveal-delay-2">
+          <div class="stat-number">+27%</div>
+          <p class="stat-text">увеличивается вовлечённость учеников</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHERE TO INVITE -->
+  <section class="section where-section">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-label">о сеансах</p>
+        <h2 class="section-title">Куда нас можно пригласить</h2>
+        <p class="section-desc">Готовые решения для любых площадок</p>
+      </div>
+      <div class="where-categories">
+        <div class="reveal reveal-delay-1">
+          <h3 class="where-cat-title">Учебные заведения</h3>
+          <ul class="where-list">
+            <li>Школы</li>
+            <li>Образовательные мероприятия</li>
+            <li>Кружки и продлёнки</li>
+            <li>Детские сады</li>
+            <li>Детские технопарки</li>
+          </ul>
+        </div>
+        <div class="reveal reveal-delay-2">
+          <h3 class="where-cat-title">Культура и досуг</h3>
+          <ul class="where-list">
+            <li>Библиотеки</li>
+            <li>Городские праздники</li>
+            <li>Тематические мероприятия</li>
+            <li>Музеи</li>
+            <li>Детские лагеря</li>
+            <li>Дома культуры</li>
+            <li>Центры творчества</li>
+          </ul>
+        </div>
+        <div class="reveal reveal-delay-3">
+          <h3 class="where-cat-title">Частные мероприятия</h3>
+          <ul class="where-list">
+            <li>Дни рождения</li>
+            <li>Семейные праздники</li>
+            <li>Развлекательные площадки</li>
+            <li>Торговые центры</li>
+            <li>Индивидуальные запросы</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT / TRUST -->
+  <section class="section trust-section" id="about">
+    <div class="container">
+      <div class="trust-content">
+        <div class="reveal">
+          <p class="section-label">о компании</p>
+          <h2 class="section-title">Почему нам доверяют</h2>
+          <p class="section-desc">Мы — международная компания с 16-летним опытом, которая помогает школам и родителям делать обучение наглядным и современным.</p>
+          <div class="trust-stats">
+            <div>
+              <div class="trust-stat-number">1.3 млн</div>
+              <div class="trust-stat-label">зрителей за 2025 год</div>
+            </div>
+            <div>
+              <div class="trust-stat-number">150+</div>
+              <div class="trust-stat-label">представительств в мире</div>
+            </div>
+            <div>
+              <div class="trust-stat-number">11 стран</div>
+              <div class="trust-stat-label">присутствия</div>
+            </div>
+          </div>
+        </div>
+        <div class="flags-grid reveal reveal-delay-2">
+          <div class="flag-item"><img src="images/img_22.jpg" alt="Россия"></div>
+          <div class="flag-item"><img src="images/img_23.jpg" alt="Армения"></div>
+          <div class="flag-item"><img src="images/img_25.jpg" alt="Казахстан"></div>
+          <div class="flag-item"><img src="images/img_31.jpg" alt="Италия"></div>
+          <div class="flag-item"><img src="images/img_26.png" alt=""></div>
+          <div class="flag-item"><img src="images/img_29.jpg" alt=""></div>
+          <div class="flag-item"><img src="images/img_30.jpg" alt=""></div>
+          <div class="flag-item"><img src="images/img_32.jpg" alt=""></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CATALOG -->
+  <section class="section catalog-section" id="catalog">
+    <div class="container">
+      <div class="section-header reveal">
+        <p class="section-label">эксклюзивный каталог</p>
+        <h2 class="section-title">Крупнейшая библиотека научно-популярного контента в VR</h2>
+        <p class="section-desc">Мы собрали более 160 фильмов на 22 языках для разных возрастов и программ обучения.</p>
+      </div>
+      <div class="catalog-showcase reveal">
+        <div class="catalog-posters">
+          <div class="catalog-poster featured">
+            <img src="images/img_43.png" alt="Каталог VR-фильмов Альтаирика">
+          </div>
+        </div>
+        <div>
+          <img src="images/img_38.png" alt="Обитатели морей и океанов" style="border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); max-height: 500px;">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOR SCHOOLS + PARENTS -->
+  <section class="section offer-section">
+    <div class="container">
+      <div class="offer-grid">
+        <div class="offer-card reveal">
+          <p class="offer-card-label">для школ</p>
+          <h3 class="offer-card-title">Уроки в учебных учреждениях</h3>
+          <p class="offer-card-desc">Проводим полноценный VR-урок на нашем оборудовании — никаких технических хлопот для педагога.</p>
+          <ul class="checklist">
+            <li>Готовые образовательные программы</li>
+            <li>Вписываемся в стандартное расписание</li>
+            <li>Безопасный формат занятий</li>
+          </ul>
+          <a href="#contact" class="btn btn-primary" style="margin-top: 24px;">Узнать подробнее</a>
+        </div>
+        <div class="offer-card reveal reveal-delay-1">
+          <p class="offer-card-label">для родителей</p>
+          <h3 class="offer-card-title">Выездные сеансы на&nbsp;ваши мероприятия</h3>
+          <p class="offer-card-desc">Образовательные фильмы и интерактивные путешествия, которые дарят яркие эмоции и расширяют кругозор.</p>
+          <ul class="checklist">
+            <li>Подборки по возрасту и интересам</li>
+            <li>Формат «польза + впечатления»</li>
+            <li>Украшение вашего праздника</li>
+          </ul>
+          <a href="#contact" class="btn btn-primary" style="margin-top: 24px;">Узнать подробнее</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- APP DOWNLOAD -->
+  <section class="section app-section">
+    <div class="container">
+      <div class="app-content">
+        <div class="app-phone reveal">
+          <img src="images/img_50.png" alt="Приложение Альтаирика">
+        </div>
+        <div class="reveal reveal-delay-1">
+          <p class="section-label">приложение на iOS и Android</p>
+          <h2 class="section-title">Смотрите демо-фильмы на смартфоне</h2>
+          <p class="section-desc">Скачайте приложение на любое мобильное устройство и получите демо-доступ к трём фильмам прямо сейчас.</p>
+          <p class="section-desc" style="margin-top: 16px;">Мы уверены в качестве контента, поэтому открываем бесплатный демо-доступ к 3 фильмам, чтобы вы могли увидеть всё своими глазами.</p>
+          <div class="store-buttons">
+            <a href="#" class="store-btn">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+              App Store
+            </a>
+            <a href="#" class="store-btn">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.61 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
+              Google Play
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PARTNERSHIP -->
+  <section class="section partner-section" id="partner">
+    <div class="container">
+      <div class="partner-card reveal">
+        <p class="section-label">партнёрство</p>
+        <h2 class="section-title" style="max-width: 600px; margin-left: auto; margin-right: auto;">В вашем городе ещё нет представителя Альтаирики?</h2>
+        <p class="section-desc" style="margin: 16px auto 32px; text-align: center;">Станьте партнёром проекта и развивайте востребованный образовательный бизнес у себя в регионе.</p>
+        <a href="#contact" class="btn btn-orange">Узнать подробнее</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIDEO -->
+  <section class="section video-section">
+    <div class="container">
+      <div class="section-header reveal" style="text-align: center;">
+        <p class="section-label">об альтаирике</p>
+        <h2 class="section-title">Посмотрите, как проходят наши сеансы</h2>
+      </div>
+      <div class="video-placeholder reveal">
+        <img src="images/img_62.jpg" alt="Как проходят VR-сеансы">
+        <div class="video-play">
+          <div class="video-play-icon">
+            <svg viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT FORM -->
+  <section class="section contact-section" id="contact">
+    <div class="container">
+      <div class="contact-grid">
+        <div class="reveal">
+          <p class="section-label">форма для связи</p>
+          <h2 class="section-title">Подарите детям приключение в VR</h2>
+          <ul class="checklist" style="margin-top: 24px;">
+            <li>Подберём программу сеанса под возраст и цели</li>
+            <li>Расскажем, как будет проходить VR-урок</li>
+            <li>Поможем с организацией и оборудованием</li>
+          </ul>
+        </div>
+        <div class="reveal reveal-delay-1">
+          <p class="section-desc" style="margin-bottom: 24px;">Заполните короткую форму ниже, и мы свяжемся с вами в ближайшее время.</p>
+          <form class="contact-form" id="contactForm">
+            <div class="form-field">
+              <input type="text" name="name" placeholder="Имя" required>
+            </div>
+            <div class="form-field">
+              <input type="text" name="city" placeholder="Город">
+            </div>
+            <div class="form-field">
+              <input type="email" name="email" placeholder="Email" required>
+            </div>
+            <div class="form-field">
+              <input type="tel" name="phone" placeholder="+7 (000)-000-00-00">
+            </div>
+            <button type="submit" class="btn btn-primary" style="align-self: flex-start;">Отправить заявку</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="#" class="logo">АЛЬТА<span>ИРИКА</span></a>
+          <p style="margin-top: 16px;">Международная компания, которая помогает детям изучать мир через VR-технологии.</p>
+          <div style="margin-top: 20px;">
+            <p style="font-size: 14px;"><strong>8 800 555-50-14</strong></p>
+            <p style="font-size: 14px; color: var(--white-dim);">info@altairika.com</p>
+            <p style="font-size: 13px; color: var(--white-dim); margin-top: 8px;">Большой бульвар, 42 стр. 1,<br>Сколково, Можайский, г. Москва</p>
+          </div>
+        </div>
+        <div>
+          <h4 class="footer-col-title">О компании</h4>
+          <ul class="footer-links">
+            <li><a href="#">О нас</a></li>
+            <li><a href="#">Команда</a></li>
+            <li><a href="#">Разработки</a></li>
+            <li><a href="#">Награды</a></li>
+            <li><a href="#">Блог</a></li>
+            <li><a href="#">СМИ о нас</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-col-title">О сеансах</h4>
+          <ul class="footer-links">
+            <li><a href="#">Для школ</a></li>
+            <li><a href="#">Для родителей</a></li>
+            <li><a href="#">Каталог</a></li>
+            <li><a href="#">Каталог для планетариев</a></li>
+            <li><a href="#">Контакты</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-col-title">Партнёрство</h4>
+          <ul class="footer-links">
+            <li><a href="#">Франшиза</a></li>
+            <li><a href="#">Вакансии</a></li>
+            <li><a href="#">Контакты</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-col-title">Документация</h4>
+          <ul class="footer-links">
+            <li><a href="#">Политика конфиденциальности</a></li>
+            <li><a href="#">Реквизиты</a></li>
+            <li><a href="#">Документация ПО</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; АО Альтаирика, 2010–2026</p>
+        <p>Сведения об образовательной организации</p>
+        <p>Внесена в реестр российского программного обеспечения: запись №&nbsp;26686 от 28.02.2025</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SCRIPTS -->
+  <script>
+    // Header scroll effect
+    const header = document.getElementById('header');
+    window.addEventListener('scroll', () => {
+      header.classList.toggle('scrolled', window.scrollY > 50);
+    });
+
+    // Reveal on scroll
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
+    reveals.forEach(el => observer.observe(el));
+
+    // Mobile menu toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const nav = document.querySelector('.nav');
+    menuToggle.addEventListener('click', () => {
+      nav.style.display = nav.style.display === 'flex' ? 'none' : 'flex';
+      nav.style.position = 'absolute';
+      nav.style.top = '100%';
+      nav.style.left = '0';
+      nav.style.right = '0';
+      nav.style.background = 'rgba(10, 1, 24, 0.95)';
+      nav.style.flexDirection = 'column';
+      nav.style.padding = '24px';
+      nav.style.backdropFilter = 'blur(20px)';
+    });
+
+    // Form handler (placeholder)
+    document.getElementById('contactForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      alert('Спасибо! Мы свяжемся с вами в ближайшее время.');
+    });
+  </script>
+
+</body>
+</html>
