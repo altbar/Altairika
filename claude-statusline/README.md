@@ -1,6 +1,6 @@
 # Claude Code Status Line
 
-Custom status bar for Claude Code — shows model, context, rate limits, and costs in real time.
+Кастомный статус-бар для Claude Code — показывает модель, контекст, лимиты и расходы в реальном времени.
 
 ```
  Opus 4.6 | К: ◆◆◆◆◆◇◇◇◇◇ 76% (128k|200k) $0.28 | С: 162k $6.05
@@ -8,76 +8,76 @@ Custom status bar for Claude Code — shows model, context, rate limits, and cos
  .        | Д: 2M $35 | 7д: 21M $464 | 30д: 115M $1228
 ```
 
-## Quick Install
+## Быстрая установка
 
-Give this repo URL to your Claude Code and say: **"Install this status line"**
+Отдай ссылку на этот репо своему Claude Code и скажи: **«Установи этот status line»**
 
-Claude will clone the repo, install dependencies, copy the script, update settings, and verify — fully automatic.
+Клод сам склонирует репо, поставит зависимости, скопирует скрипт, обновит настройки и проверит — всё автоматически.
 
-## Manual Install
+## Ручная установка
 
 ```bash
-# 1. Dependencies
+# 1. Зависимости
 brew install jq
-npm install -g ccusage  # optional, for expense tracking
+npm install -g ccusage  # опционально, для строки расходов
 
-# 2. Copy script
+# 2. Скопировать скрипт
 cp statusline.sh ~/.claude/statusline.sh
 chmod +x ~/.claude/statusline.sh
 
-# 3. Add to ~/.claude/settings.json (merge into existing file if present)
+# 3. Добавить в ~/.claude/settings.json (вмержить в существующий файл)
 # "statusLine": { "type": "command", "command": "bash ~/.claude/statusline.sh" }
 
-# 4. Restart Claude Code
+# 4. Перезапустить Claude Code
 ```
 
-## What each element means
+## Что означает каждый элемент
 
-### Line 1 — Model + Context + Session
+### Строка 1 — Модель + Контекст + Сессия
 
-| Element | Example | Meaning |
-|---------|---------|---------|
-| `Opus 4.6` | | Current model |
-| `К:` | `◆◆◆◆◆◇◇◇◇◇` | Context window usage bar (`◆` used, `◇` free) |
-| `76%` | | Context utilization |
-| `(128k\|200k)` | | (tokens used \| window size) |
-| `$0.28` | | Last request cost |
-| `С:` | `162k $6.05` | Session totals: tokens + cost |
+| Элемент | Пример | Значение |
+|---------|--------|----------|
+| `Opus 4.6` | | Текущая модель |
+| `К:` | `◆◆◆◆◆◇◇◇◇◇` | Загрузка контекстного окна (`◆` занято, `◇` свободно) |
+| `76%` | | Процент использования контекста |
+| `(128k\|200k)` | | (использовано токенов \| размер окна) |
+| `$0.28` | | Стоимость последнего запроса |
+| `С:` | `162k $6.05` | Итоги сессии: токены + стоимость |
 
-### Line 2 — Rate Limits
+### Строка 2 — Rate Limits (лимиты)
 
-| Element | Example | Meaning |
-|---------|---------|---------|
-| `5ч:` | `◼◼◼◼◻◻◻◻◻◻ 38%` | 5-hour limit: bar + % |
-| `0:14` | | Time until 5h reset (hours:minutes) |
-| `Н:` | `◑ 61%` | 7-day limit: pie icon + % |
-| `3д2ч` | | Time until 7-day reset |
+| Элемент | Пример | Значение |
+|---------|--------|----------|
+| `5ч:` | `◼◼◼◼◻◻◻◻◻◻ 38%` | 5-часовой лимит: шкала + % |
+| `0:14` | | Время до сброса (часы:минуты) |
+| `Н:` | `◑ 61%` | 7-дневный лимит: иконка + % |
+| `3д2ч` | | Время до сброса (дни + часы) |
 
-Pie icons: `○` ≤20% · `◔` ≤40% · `◑` ≤60% · `◕` ≤80% · `●` >80%
+Иконки-пирожки: `○` ≤20% · `◔` ≤40% · `◑` ≤60% · `◕` ≤80% · `●` >80%
 
-> Cached 15 min. Requires Claude Max subscription.
+> Кэш 15 мин. Требуется подписка Claude Max.
 
-### Line 3 — Expenses
+### Строка 3 — Расходы
 
-| Element | Example | Meaning |
-|---------|---------|---------|
-| `Д:` | `2M $35` | Today's tokens + cost |
-| `7д:` | `21M $464` | Last 7 days |
-| `30д:` | `115M $1228` | Last 30 days |
+| Элемент | Пример | Значение |
+|---------|--------|----------|
+| `Д:` | `2M $35` | Токены + стоимость за сегодня |
+| `7д:` | `21M $464` | За последние 7 дней |
+| `30д:` | `115M $1228` | За последние 30 дней |
 
-> Cached 60 sec. Requires `ccusage` CLI.
+> Кэш 60 сек. Требуется утилита `ccusage`.
 
-## Customization
+## Кастомизация
 
-| What | How |
-|------|-----|
-| Remove expenses (line 3) | Delete `# LINE 3: EXPENSES` block from `statusline.sh` |
-| Remove limits (line 2) | Delete `# LINE 2: LIMITS` block from `statusline.sh` |
-| Change bar width | Edit last arg in `bar()` calls (default: 10) |
-| Change bar symbols | Edit fill/empty chars, e.g. `'■' '□'` instead of `'◆' '◇'` |
-| Uninstall | Remove `"statusLine"` from `~/.claude/settings.json`, delete `~/.claude/statusline.sh` |
+| Что | Как |
+|-----|-----|
+| Убрать расходы (строка 3) | Удалить блок `# LINE 3: EXPENSES` из `statusline.sh` |
+| Убрать лимиты (строка 2) | Удалить блок `# LINE 2: LIMITS` из `statusline.sh` |
+| Изменить ширину шкалы | Последний аргумент в вызовах `bar()` (по умолчанию 10) |
+| Изменить символы шкалы | Заменить fill/empty символы, напр. `'■' '□'` вместо `'◆' '◇'` |
+| Удалить | Убрать `"statusLine"` из `~/.claude/settings.json`, удалить `~/.claude/statusline.sh` |
 
-## Platform
+## Платформа
 
-- **macOS**: works out of the box
-- **Linux**: lines 1 + 3 work; line 2 needs Keychain replaced with `~/.claude/.credentials.json` + `stat -f %m` → `stat -c %Y`
+- **macOS**: работает из коробки
+- **Linux**: строки 1 и 3 работают; строка 2 требует замены Keychain на `~/.claude/.credentials.json` + `stat -f %m` → `stat -c %Y`

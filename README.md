@@ -1,10 +1,10 @@
 # Altairika
 
-Public tools, templates, and guides by [Altbar](https://github.com/altbarnaul).
+Публичные инструменты, шаблоны и гайды от [Altbar](https://github.com/altbar).
 
-## Contents
+## Содержание
 
-| Folder | Description |
-|--------|-------------|
-| [claude-statusline](./claude-statusline/) | Custom status bar for Claude Code — model, context, rate limits, costs |
-| [figma-landings](./figma-landings/) | Figma-to-code landing page workflow with Claude Code |
+| Папка | Описание |
+|-------|----------|
+| [claude-statusline](./claude-statusline/) | Статус-бар для Claude Code — модель, контекст, лимиты, расходы |
+| [figma-landings](./figma-landings/) | Воркфлоу Figma → код для лендингов через Claude Code |
