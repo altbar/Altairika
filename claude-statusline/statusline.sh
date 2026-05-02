@@ -11,6 +11,25 @@ INPUT=$(cat)
 D="$HOME/.claude/cache/statusline"
 mkdir -p "$D" 2>/dev/null
 
+# ═══════════════════ LOCK HELPER ═══════════════════
+# mkdir-based atomic lock — prevents N parallel statusline runs from
+# spawning N copies of ccusage / curl. Stale locks (>120s) are auto-cleared.
+# Usage: _bg_locked <name> <cmd...>
+_bg_locked() {
+  local name=$1; shift
+  local LOCK="$D/$name.lock"
+  if [[ -d "$LOCK" ]]; then
+    local age=$(( $(date +%s) - $(stat -f %m "$LOCK" 2>/dev/null || echo 0) ))
+    (( age > 120 )) && rmdir "$LOCK" 2>/dev/null
+  fi
+  (
+    if mkdir "$LOCK" 2>/dev/null; then
+      trap "rmdir '$LOCK' 2>/dev/null" EXIT INT TERM
+      "$@"
+    fi
+  ) </dev/null &>/dev/null &
+}
+
 # ═══════════════════ CONFIG ═══════════════════
 # API: https://api.anthropic.com/api/oauth/usage
 # Response: { "five_hour": { "utilization": 12.0, "resets_at": "..." }, "seven_day": { ... } }
@@ -120,19 +139,21 @@ _fetch_lim() {
   echo "$r"; return 0
 }
 
-# Fully non-blocking: read cache, refresh in background if stale/missing
+# Fully non-blocking: read cache, refresh in background if stale/missing.
+# Lock prevents N statusline runs from issuing N parallel API calls.
+_refresh_limits() {
+  _fetch_lim > "$LC.tmp" 2>/dev/null && mv "$LC.tmp" "$LC" && rm -f "$LC.neg" \
+    || { rm -f "$LC.tmp"; touch "$LC.neg"; }
+}
 LDATA=""
 if [[ -f "$LC" ]]; then
   LDATA=$(cat "$LC" 2>/dev/null)
   AGE=$(( $(date +%s) - $(stat -f %m "$LC" 2>/dev/null || echo 0) ))
-  (( AGE >= 900 )) && \
-    ( _fetch_lim > "$LC.tmp" 2>/dev/null && mv "$LC.tmp" "$LC" && rm -f "$LC.neg" \
-      || { rm -f "$LC.tmp"; touch "$LC.neg"; } ) </dev/null &>/dev/null &
+  (( AGE >= 900 )) && _bg_locked limits _refresh_limits
 elif [[ ! -f "$LC.neg" ]] || \
      (( $(date +%s) - $(stat -f %m "$LC.neg" 2>/dev/null || echo 0) >= 300 )); then
   # No cache + no recent failure → background fetch (negative cache 5min)
-  ( _fetch_lim > "$LC.tmp" 2>/dev/null && mv "$LC.tmp" "$LC" && rm -f "$LC.neg" \
-    || { rm -f "$LC.tmp"; touch "$LC.neg"; } ) </dev/null &>/dev/null &
+  _bg_locked limits _refresh_limits
 fi
 
 # Save raw response for debugging
@@ -199,15 +220,19 @@ _fetch_exp() {
     --mode calculate 2>/dev/null
 }
 
-# Fully non-blocking: read cache, refresh in background if stale/missing
+# Fully non-blocking: read cache, refresh in background if stale/missing.
+# Lock prevents N statusline runs from forking N parallel ccusage processes
+# (ccusage is heavy — ~100% CPU for ~30s on a 30-day window).
+_refresh_expenses() {
+  _fetch_exp > "$EC.tmp" 2>/dev/null && mv "$EC.tmp" "$EC" || rm -f "$EC.tmp"
+}
 EDATA=""
 if [[ -f "$EC" ]]; then
   EDATA=$(cat "$EC" 2>/dev/null)
   AGE=$(( $(date +%s) - $(stat -f %m "$EC" 2>/dev/null || echo 0) ))
-  (( AGE >= 60 )) && \
-    ( _fetch_exp > "$EC.tmp" 2>/dev/null && mv "$EC.tmp" "$EC" || rm -f "$EC.tmp" ) </dev/null &>/dev/null &
+  (( AGE >= 60 )) && _bg_locked expenses _refresh_expenses
 else
-  ( _fetch_exp > "$EC.tmp" 2>/dev/null && mv "$EC.tmp" "$EC" || rm -f "$EC.tmp" ) </dev/null &>/dev/null &
+  _bg_locked expenses _refresh_expenses
 fi
 
 if [[ -n "${EDATA:-}" ]]; then
