@@ -77,13 +77,13 @@ Say: **"Status line installed. Restart Claude Code to see it — just run `claud
 Then show them what they'll see:
 
 ```
-Opus 4.6 | К: ◆◆◆◆◆◇◇◇◇◇ 76% (128k|200k) $0.28 | С: 162k $6.05
-.        | 5ч: ◼◼◼◼◻◻◻◻◻◻ 38% 0:14 | Н: ◑ 61% 3д2ч
-.        | Д: 2M $35 | 7д: 21M $464 | 30д: 115M $1228
+Opus 4.8 | К: ◆◆◇◇◇◇◇◇◇◇ 21% (214k|1M) $0.28 | С: 215k $6.05
+.        | 5ч: ◼◻◻◻◻◻◻◻◻◻ 18% 3:02 | Н: ◔ 34% 2д12ч
+.        | Д: 5M $99 | 7д: 62M $684 | 30д: 156M $2419
 ```
 
 - **Line 1**: Model, context window usage (bar + % + tokens), last request cost, session totals
-- **Line 2**: 5-hour rate limit (bar + % + time to reset), 7-day limit (pie + % + time to reset)
+- **Line 2**: 5-hour rate limit (bar + % + time to reset), 7-day limit (pie + % + time to reset). Read straight from the Claude Code stdin payload (`.rate_limits`) — no API call, no token, no OAuth scope; works on any Claude token. Shows `—` if the payload carries no limits.
 - **Line 3**: Token counts and USD costs for today / 7 days / 30 days
 
 ## Platform compatibility
@@ -91,27 +91,20 @@ Opus 4.6 | К: ◆◆◆◆◆◇◇◇◇◇ 76% (128k|200k) $0.28 | С: 162k $
 | Feature | macOS | Linux |
 |---------|-------|-------|
 | Line 1 (model + context) | Works | Works (replace `stat -f %m` with `stat -c %Y`) |
-| Line 2 (rate limits) | Works | Needs adaptation: replace `security find-generic-password` with reading `~/.claude/.credentials.json` |
+| Line 2 (rate limits) | Works | Works (data comes from stdin `.rate_limits` — no Keychain, no API) |
 | Line 3 (expenses) | Works | Works if ccusage is installed |
 
-If on Linux, after copying the script, make these two edits in `~/.claude/statusline.sh`:
+If on Linux, after copying the script, make one edit in `~/.claude/statusline.sh`:
 
-1. Replace all `stat -f %m` with `stat -c %Y`
-2. Replace the `_fetch_lim()` function's token retrieval:
-   ```bash
-   # macOS (original):
-   tk=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
-     | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
+1. Replace all `stat -f %m` with `stat -c %Y` (used by the lock helper and the cache-age checks)
 
-   # Linux (replacement):
-   tk=$(jq -r '.claudeAiOauth.accessToken // empty' ~/.claude/.credentials.json 2>/dev/null)
-   ```
+That's it — line 2 needs no adaptation because rate limits arrive in the Claude Code stdin payload, not via Keychain or an API call.
 
 ## Customization (if the user asks)
 
 - **Remove expense line (line 3)**: Delete from `# LINE 3: EXPENSES` to end of file
-- **Remove rate limits line (line 2)**: Delete the `# LINE 2: LIMITS` block
-- **Keep only line 1**: Delete everything after line 98 in the script
+- **Remove rate limits line (line 2)**: Delete the `# LINE 2: RATE LIMITS` block
+- **Keep only line 1**: Delete the `# LINE 2: RATE LIMITS` and `# LINE 3: EXPENSES` blocks
 - **Change bar width**: Edit last arg in `bar()` calls (default 10)
 - **Change bar symbols**: Edit fill/empty chars in `bar()` calls (e.g., `'■' '□'` instead of `'◆' '◇'`)
 - **Uninstall**: Remove `"statusLine"` from `~/.claude/settings.json`, delete `~/.claude/statusline.sh`

@@ -1,9 +1,9 @@
 #!/bin/bash
 # ~/.claude/statusline.sh — Claude Code statusline (3 lines)
 #
-# Line 1: Opus 4.6 | К: ◆◆◆◆◆◆◆◇◇◇ 76% (128k|200k) $0.28 | С: 162k $6.05
-# Line 2: .        | 5ч: ◼◼◼◼◼◼◼◻◻◻ 71% 0:14 | Н: ◑ 61% ср 18.02
-# Line 3: .        | Д: 2M $35 | 7д: 21M $464 | 30д: 115M $1228
+# Line 1: Opus 4.8 | К: ◆◆◇◇◇◇◇◇◇◇ 21% (214k|1M) $0.28 | С: 215k $6.05
+# Line 2: .        | 5ч: ◼◻◻◻◻◻◻◻◻◻ 18% 3:02 | Н: ◔ 34% 2д12ч
+# Line 3: .        | Д: 5M $99 | 7д: 62M $684 | 30д: 156M $2419
 
 set -uo pipefail
 
@@ -13,7 +13,7 @@ mkdir -p "$D" 2>/dev/null
 
 # ═══════════════════ LOCK HELPER ═══════════════════
 # mkdir-based atomic lock — prevents N parallel statusline runs from
-# spawning N copies of ccusage / curl. Stale locks (>120s) are auto-cleared.
+# spawning N copies of ccusage. Stale locks (>120s) are auto-cleared.
 # Usage: _bg_locked <name> <cmd...>
 _bg_locked() {
   local name=$1; shift
@@ -31,9 +31,10 @@ _bg_locked() {
 }
 
 # ═══════════════════ CONFIG ═══════════════════
-# API: https://api.anthropic.com/api/oauth/usage
-# Response: { "five_hour": { "utilization": 12.0, "resets_at": "..." }, "seven_day": { ... } }
-# utilization is already a percentage (0-100)
+# Rate limits come straight from the Claude Code statusline stdin payload:
+#   .rate_limits.{five_hour,seven_day}.{used_percentage (0-100), resets_at (unix epoch)}
+# No API/token needed. (Previously fetched /api/oauth/usage, which needs the
+# user:profile scope the yearly token lacks — see memory: statusline-limits-token.)
 
 # ═══════════════════ HELPERS ═══════════════════
 
@@ -75,14 +76,21 @@ eval "$(echo "$INPUT" | jq -r '
   "TI=\(.context_window.total_input_tokens // 0)",
   "TO=\(.context_window.total_output_tokens // 0)",
   "SC=\(.cost.total_cost_usd // 0)",
+  "RFP=\(.rate_limits.five_hour.used_percentage // -1)",
+  "RFR=\(.rate_limits.five_hour.resets_at // 0)",
+  "RSP=\(.rate_limits.seven_day.used_percentage // -1)",
+  "RSR=\(.rate_limits.seven_day.resets_at // 0)",
   "SI=\(.session_id // "x" | @sh)"
 ' 2>/dev/null)" 2>/dev/null || true
 
 # ═══════════════════ LINE 1: MODEL + CONTEXT + SESSION ═══════════════════
 
 case "${MID:-}" in
+  *opus-4-8*)   M="Opus 4.8" ;;
+  *opus-4-7*)   M="Opus 4.7" ;;
   *opus-4-6*)   M="Opus 4.6" ;;
   *opus-4-5*)   M="Opus 4.5" ;;
+  *sonnet-4-6*) M="Sonnet 4.6" ;;
   *sonnet-4-5*) M="Sonnet 4.5" ;;
   *haiku-4-5*)  M="Haiku 4.5" ;;
   *)            M="${MDN:-${MID:-?}}" ;;
@@ -119,85 +127,32 @@ printf '%s | К: %s %d%% (%s|%s) $%.2f | С: %s $%.2f\n' \
 # Alignment padding for lines 2-3 (dot prevents leading-space trim)
 PAD=".$(printf '%*s' ${#M} '')"
 
-# ═══════════════════ LINE 2: LIMITS (OAuth API, 15min cache) ═══════════════════
+# ═══════════════════ LINE 2: RATE LIMITS (from CC stdin .rate_limits) ═══════════════════
+# Claude Code passes live 5h/weekly limits in the statusline stdin payload
+# (.rate_limits.{five_hour,seven_day}.{used_percentage,resets_at}). No API call,
+# no token, no `user:profile` scope — works natively on the yearly token.
+# used_percentage is 0-100; resets_at is a unix epoch. (RFP/RFR/RSP/RSR parsed above.)
 
-LC="$D/limits.json"
+if (( ${RFP:--1} >= 0 )); then
+  NOW=$(date +%s)
+  SP=${RFP}; (( SP < 0 )) && SP=0; (( SP > 100 )) && SP=100
+  LP=${RSP:-0}; (( LP < 0 )) && LP=0; (( LP > 100 )) && LP=100
 
-_fetch_lim() {
-  local tk
-  tk=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
-    | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null) || return 1
-  [[ -z "$tk" ]] && return 1
-  local r=""
-  r=$(curl -sf --connect-timeout 3 --max-time 5 \
-    -H "Authorization: Bearer $tk" \
-    -H "anthropic-beta: oauth-2025-04-20" \
-    -H "Accept: application/json" \
-    "https://api.anthropic.com/api/oauth/usage" 2>/dev/null) || return 1
-  [[ -z "$r" || "${r:-}" == "<"* ]] && return 1
-  echo "$r" | jq empty 2>/dev/null || return 1
-  echo "$r"; return 0
-}
-
-# Fully non-blocking: read cache, refresh in background if stale/missing.
-# Lock prevents N statusline runs from issuing N parallel API calls.
-_refresh_limits() {
-  _fetch_lim > "$LC.tmp" 2>/dev/null && mv "$LC.tmp" "$LC" && rm -f "$LC.neg" \
-    || { rm -f "$LC.tmp"; touch "$LC.neg"; }
-}
-LDATA=""
-if [[ -f "$LC" ]]; then
-  LDATA=$(cat "$LC" 2>/dev/null)
-  AGE=$(( $(date +%s) - $(stat -f %m "$LC" 2>/dev/null || echo 0) ))
-  (( AGE >= 900 )) && _bg_locked limits _refresh_limits
-elif [[ ! -f "$LC.neg" ]] || \
-     (( $(date +%s) - $(stat -f %m "$LC.neg" 2>/dev/null || echo 0) >= 300 )); then
-  # No cache + no recent failure → background fetch (negative cache 5min)
-  _bg_locked limits _refresh_limits
-fi
-
-# Save raw response for debugging
-[[ -n "${LDATA:-}" ]] && echo "$LDATA" > "$D/limits_debug.json" 2>/dev/null
-
-if [[ -n "${LDATA:-}" ]]; then
-  # Parse utilization (already a percentage) and resets_at from API
-  SP=$(echo "$LDATA" | jq -r '.five_hour.utilization // 0' 2>/dev/null) || SP=0
-  SR=$(echo "$LDATA" | jq -r '.five_hour.resets_at // ""' 2>/dev/null) || SR=""
-  LP=$(echo "$LDATA" | jq -r '.seven_day.utilization // 0' 2>/dev/null) || LP=0
-  LRE=$(echo "$LDATA" | jq -r '.seven_day.resets_at // ""' 2>/dev/null) || LRE=""
-
-  # Fix null/empty
-  [[ "$SP" == "null" || -z "$SP" ]] && SP=0
-  [[ "$LP" == "null" || -z "$LP" ]] && LP=0
-  [[ "$SR" == "null" ]] && SR=""
-  [[ "$LRE" == "null" ]] && LRE=""
-
-  # Truncate to integer for bar/pie
-  SP=${SP%%.*}; (( SP > 100 )) && SP=100
-  LP=${LP%%.*}; (( LP > 100 )) && LP=100
-
-  # Time until 5h reset (parse ISO 8601 UTC → epoch)
+  # 5h reset → "H:MM"
   STIME=""
-  if [[ -n "$SR" ]]; then
-    # Convert UTC time: strip fractional seconds and tz, append UTC
-    CLEAN="${SR%%[.+]*}"
-    RST=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$CLEAN" "+%s" 2>/dev/null || echo 0)
-    NOW=$(date +%s)
-    DIFF=$(( RST - NOW ))
-    (( DIFF > 0 )) && STIME="$((DIFF / 3600)):$(printf '%02d' $((DIFF % 3600 / 60)))"
+  if (( ${RFR:-0} > NOW )); then
+    DIFF=$(( RFR - NOW ))
+    STIME="$((DIFF / 3600)):$(printf '%02d' $((DIFF % 3600 / 60)))"
   fi
 
-  # Weekly time until reset (e.g. "6д22ч" or "3ч15м")
+  # Weekly reset → "6д22ч" (>1d) or "3ч15м" (<1d)
   LTIME=""
-  if [[ -n "$LRE" ]]; then
-    CLEAN="${LRE%%[.+]*}"
-    LRST=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$CLEAN" "+%s" 2>/dev/null || echo 0)
-    NOW=$(date +%s)
-    LDIFF=$(( LRST - NOW ))
-    if (( LDIFF > 86400 )); then
-      LTIME="$((LDIFF / 86400))д$((LDIFF % 86400 / 3600))ч"
-    elif (( LDIFF > 0 )); then
-      LTIME="$((LDIFF / 3600))ч$(printf '%02d' $((LDIFF % 3600 / 60)))м"
+  if (( ${RSR:-0} > NOW )); then
+    LD=$(( RSR - NOW ))
+    if (( LD > 86400 )); then
+      LTIME="$((LD / 86400))д$((LD % 86400 / 3600))ч"
+    else
+      LTIME="$((LD / 3600))ч$(printf '%02d' $((LD % 3600 / 60)))м"
     fi
   fi
 
