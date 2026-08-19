@@ -1,26 +1,35 @@
 #!/bin/bash
 # ~/.claude/statusline.sh — Claude Code statusline (3 lines)
 #
-# Line 1: Opus 4.8 | К: ◆◆◇◇◇◇◇◇◇◇ 21% (214k|1M) $0.28 | С: 215k $6.05
-# Line 2: .        | 5ч: ◼◻◻◻◻◻◻◻◻◻ 18% 3:02 | Н: ◔ 34% 2д12ч
-# Line 3: .        | Д: 5M $99 | 7д: 62M $684 | 30д: 156M $2419
+# Line 1: Opus 5 | К:  ◼◼◻◻◻◻◻◻◻◻ 26% (266k|1M) $0.21 | С: 266k $11.15
+# Line 2: .      | 5ч: ◼◼◼◼◻◻◻◻◻◻ 40% 1:56 | Н: ● 88% 5ч13м
+# Line 3: .      | Д: 6M $360 | 7д: 191M $4607 | 30д: 280M $6878
 
 set -uo pipefail
 
 INPUT=$(cat)
 D="$HOME/.claude/cache/statusline"
+NOW=$(date +%s)
 mkdir -p "$D" 2>/dev/null
 
 # ═══════════════════ LOCK HELPER ═══════════════════
 # mkdir-based atomic lock — prevents N parallel statusline runs from
-# spawning N copies of ccusage. Stale locks (>120s) are auto-cleared.
+# spawning N copies of ccusage.
+#
+# The stale-lock threshold MUST exceed the slowest job it guards. It sat at 120s
+# from when ccusage still finished in ~30s; as the transcripts grew the run passed
+# 2 min, so every run outlived its own lock, the next redraw cleared it as "stale"
+# and started a second copy. With ~50 sessions redrawing that stacked into a pile
+# of 100%-CPU ccusage processes — load average ~20, WindowServer saturated, input
+# lagging. ccusage 20 is back to ~10s, but keep the wide margin: the invariant is
+# what matters, and the runtime grows again with the transcripts.
 # Usage: _bg_locked <name> <cmd...>
 _bg_locked() {
   local name=$1; shift
   local LOCK="$D/$name.lock"
   if [[ -d "$LOCK" ]]; then
     local age=$(( $(date +%s) - $(stat -f %m "$LOCK" 2>/dev/null || echo 0) ))
-    (( age > 120 )) && rmdir "$LOCK" 2>/dev/null
+    (( age > 1800 )) && rmdir "$LOCK" 2>/dev/null
   fi
   (
     if mkdir "$LOCK" 2>/dev/null; then
@@ -31,10 +40,11 @@ _bg_locked() {
 }
 
 # ═══════════════════ CONFIG ═══════════════════
-# Rate limits come straight from the Claude Code statusline stdin payload:
+# The 5h/weekly limits come straight from the Claude Code statusline stdin payload:
 #   .rate_limits.{five_hour,seven_day}.{used_percentage (0-100), resets_at (unix epoch)}
-# No API/token needed. (Previously fetched /api/oauth/usage, which needs the
-# user:profile scope the yearly token lacks — see memory: statusline-limits-token.)
+# No API, no token, no `user:profile` scope. An older version polled
+# /api/oauth/usage with the short-lived claude.ai token; when that expired the line
+# froze on a stale cache and showed `-`. Never route these two back through an API.
 
 # ═══════════════════ HELPERS ═══════════════════
 
@@ -64,6 +74,14 @@ pie() { # pct → ○◔◑◕●
   else printf '●'; fi
 }
 
+dur() { # epoch → "6д22ч" (>1d) / "3ч15м" (<1d) / "-" (past or unknown)
+  local t=${1:-0} now=${2:-0} d
+  (( t > now )) || { printf '%s' '-'; return; }
+  d=$(( t - now ))
+  if (( d > 86400 )); then printf '%dд%dч' $(( d / 86400 )) $(( d % 86400 / 3600 ))
+  else printf '%dч%02dм' $(( d / 3600 )) $(( d % 3600 / 60 )); fi
+}
+
 # ═══════════════════ PARSE STDIN JSON ═══════════════════
 
 eval "$(echo "$INPUT" | jq -r '
@@ -76,9 +94,9 @@ eval "$(echo "$INPUT" | jq -r '
   "TI=\(.context_window.total_input_tokens // 0)",
   "TO=\(.context_window.total_output_tokens // 0)",
   "SC=\(.cost.total_cost_usd // 0)",
-  "RFP=\(.rate_limits.five_hour.used_percentage // -1)",
+  "RFP=\((.rate_limits.five_hour.used_percentage // -1) | round)",
   "RFR=\(.rate_limits.five_hour.resets_at // 0)",
-  "RSP=\(.rate_limits.seven_day.used_percentage // -1)",
+  "RSP=\((.rate_limits.seven_day.used_percentage // -1) | round)",
   "RSR=\(.rate_limits.seven_day.resets_at // 0)",
   "SI=\(.session_id // "x" | @sh)"
 ' 2>/dev/null)" 2>/dev/null || true
@@ -119,8 +137,8 @@ fi
 
 ST=$(( ${TI:-0} + ${TO:-0} ))
 
-printf '%s | К: %s %d%% (%s|%s) $%.2f | С: %s $%.2f\n' \
-  "$M" "$(bar $PCT '◆' '◇' 10)" "$PCT" \
+printf '%s | К:  %s %d%% (%s|%s) $%.2f | С: %s $%.2f\n' \
+  "$M" "$(bar $PCT '◼' '◻' 10)" "$PCT" \
   "$(fmt $USED)" "$(fmt ${CW:-200000})" \
   "${LR:-0}" "$(fmt $ST)" "${SC:-0}"
 
@@ -134,7 +152,6 @@ PAD=".$(printf '%*s' ${#M} '')"
 # used_percentage is 0-100; resets_at is a unix epoch. (RFP/RFR/RSP/RSR parsed above.)
 
 if (( ${RFP:--1} >= 0 )); then
-  NOW=$(date +%s)
   SP=${RFP}; (( SP < 0 )) && SP=0; (( SP > 100 )) && SP=100
   LP=${RSP:-0}; (( LP < 0 )) && LP=0; (( LP > 100 )) && LP=100
 
@@ -145,31 +162,30 @@ if (( ${RFP:--1} >= 0 )); then
     STIME="$((DIFF / 3600)):$(printf '%02d' $((DIFF % 3600 / 60)))"
   fi
 
-  # Weekly reset → "6д22ч" (>1d) or "3ч15м" (<1d)
-  LTIME=""
-  if (( ${RSR:-0} > NOW )); then
-    LD=$(( RSR - NOW ))
-    if (( LD > 86400 )); then
-      LTIME="$((LD / 86400))д$((LD % 86400 / 3600))ч"
-    else
-      LTIME="$((LD / 3600))ч$(printf '%02d' $((LD % 3600 / 60)))м"
-    fi
-  fi
-
   printf '%s| 5ч: %s %d%% %s | Н: %s %d%% %s\n' \
     "$PAD" "$(bar $SP '◼' '◻' 10)" "$SP" "${STIME:--}" \
-    "$(pie $LP)" "$LP" "${LTIME:--}"
+    "$(pie $LP)" "$LP" "$(dur "${RSR:-0}" "$NOW")"
 else
   printf '%s| 5ч: — | Н: —\n' "$PAD"
 fi
 
-# ═══════════════════ LINE 3: EXPENSES (ccusage, 60s cache) ═══════════════════
+# ═══════════════════ LINE 3: EXPENSES (ccusage, 15min cache) ═══════════════════
 
 EC="$D/expenses.json"
 
+# Runs in the background QoS band (efficiency cores, yields to interactive work)
+# so a ~2 min 100%-CPU scan never competes with the UI. nice is the fallback.
 _fetch_exp() {
   command -v ccusage &>/dev/null || return 1
-  ccusage daily --json \
+  local bg=(nice -n 19)
+  command -v taskpolicy &>/dev/null && bg=(taskpolicy -b nice -n 19)
+  # --offline: price from the bundled snapshot, no network at all. The remote
+  # pricing file (raw.githubusercontent.com/BerriAI/litellm/...) is unreachable on
+  # plenty of links — it hangs for ~90s and returns 0 bytes — and the fallback it
+  # leaves behind prices every current model at $0.
+  # Needs ccusage >= 20: the 18.x snapshot predates Opus 5 / Fable 5 / Sonnet 5,
+  # so on that version --offline and LITELLM_PRICING_URL both still yielded $0.
+  "${bg[@]}" ccusage daily --json --offline \
     --since "$(date -v-30d +%Y%m%d)" \
     --until "$(date +%Y%m%d)" \
     --mode calculate 2>/dev/null
@@ -178,14 +194,24 @@ _fetch_exp() {
 # Fully non-blocking: read cache, refresh in background if stale/missing.
 # Lock prevents N statusline runs from forking N parallel ccusage processes
 # (ccusage is heavy — ~100% CPU for ~30s on a 30-day window).
+# Promote the temp file only when it holds real data: a ccusage run that is killed
+# mid-write can still exit 0, and an exit-status-only check would move the empty
+# file over a good cache — which the 15-min TTL then pins in place.
 _refresh_expenses() {
-  _fetch_exp > "$EC.tmp" 2>/dev/null && mv "$EC.tmp" "$EC" || rm -f "$EC.tmp"
+  if _fetch_exp > "$EC.tmp" 2>/dev/null && jq -e '.daily | length > 0' "$EC.tmp" &>/dev/null; then
+    mv "$EC.tmp" "$EC"
+  else
+    rm -f "$EC.tmp"
+  fi
 }
 EDATA=""
-if [[ -f "$EC" ]]; then
+if [[ -s "$EC" ]]; then
   EDATA=$(cat "$EC" 2>/dev/null)
-  AGE=$(( $(date +%s) - $(stat -f %m "$EC" 2>/dev/null || echo 0) ))
-  (( AGE >= 60 )) && _bg_locked expenses _refresh_expenses
+  AGE=$(( NOW - $(stat -f %m "$EC" 2>/dev/null || echo 0) ))
+  # 15 min, not 60s: the TTL must outlast the run (or the cache expires before it
+  # is written and ccusage never stops), and with the daily figure gone from
+  # line 3 the 7д/30д totals barely move anyway.
+  (( AGE >= 900 )) && _bg_locked expenses _refresh_expenses
 else
   _bg_locked expenses _refresh_expenses
 fi
@@ -194,13 +220,15 @@ if [[ -n "${EDATA:-}" ]]; then
   TODAY=$(date +%Y-%m-%d)
   D7=$(date -v-7d +%Y-%m-%d)
 
-  # Aggregate: tokens = input + output + cacheCreation (no cacheRead), cost = totalCost
+  # Aggregate: tokens = input + output + cacheCreation (no cacheRead), cost = totalCost.
+  # The day key is `period` since ccusage 20 (`date` before it) — accept either,
+  # or the 7-day window silently matches nothing and shows $0.
   eval "$(echo "$EDATA" | jq -r --arg today "$TODAY" --arg d7 "$D7" '
     .daily as $a |
-    ($a | map(select(.date == $today)) |
+    ($a | map(select((.period // .date // "") == $today)) |
       { t: ([.[] | .inputTokens + .outputTokens + .cacheCreationTokens] | add // 0),
         c: ([.[].totalCost] | add // 0) }) as $day |
-    ($a | map(select(.date >= $d7)) |
+    ($a | map(select((.period // .date // "") >= $d7)) |
       { t: ([.[] | .inputTokens + .outputTokens + .cacheCreationTokens] | add // 0),
         c: ([.[].totalCost] | add // 0) }) as $wk |
     ($a |
