@@ -1,0 +1,4 @@
+# Shell scripts stay LF even when checked out on Windows with core.autocrlf=true.
+# Git Bash tolerates CRLF in this script today, but a stray carriage return inside
+# a future heredoc or string compare breaks it in ways that are painful to diagnose.
+*.sh text eol=lf

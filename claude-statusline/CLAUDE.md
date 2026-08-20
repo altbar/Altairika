@@ -4,7 +4,7 @@ This repo contains a status line script for Claude Code — an information bar b
 
 **When a user gives you a link to this repo, you must clone it, read this file, and install the status line automatically.**
 
-Updated 2026-08-19 09:09.
+Updated 2026-08-20.
 
 ## Full installation procedure
 
@@ -12,18 +12,38 @@ Updated 2026-08-19 09:09.
 
 ```bash
 TMPDIR=$(mktemp -d)
-git clone <REPO_URL> "$TMPDIR/claude-statusline"
+git clone --depth 1 https://github.com/altbar/Altairika.git "$TMPDIR/altairika"
+SRC="$TMPDIR/altairika/claude-statusline"
 ```
 
-If you received a URL like `https://github.com/...`, use it as `<REPO_URL>`. If the repo is already cloned or you are inside it, skip this step.
+**Do not pass the URL you were given to `git clone` as-is.** The link people share points
+at the subfolder — `https://github.com/altbar/Altairika/tree/main/claude-statusline` — and
+cloning that fails with `fatal: repository ... not found`. The status line lives in a
+subfolder of a larger repo: clone the repo root (`.../Altairika.git`) and take the script
+from `claude-statusline/` inside it, as above.
+
+If the repo is already cloned or you are inside it, skip this step and point `SRC` at the
+`claude-statusline` folder.
 
 ### Step 2: Install dependencies
 
-```bash
-# jq is required (JSON parsing); bc is required (cost deltas) and ships with macOS
-command -v jq &>/dev/null || brew install jq
-command -v bc &>/dev/null || brew install bc
+`jq` is the only hard requirement — it parses every value on all three lines. Install it
+for the platform you are actually on:
 
+```bash
+# macOS
+command -v jq &>/dev/null || brew install jq
+# Linux
+command -v jq &>/dev/null || apt-get install -y jq      # or: yum install -y jq
+# Windows (Git Bash) — run from PowerShell, then restart the terminal so PATH picks it up
+winget install --id jqlang.jq -e --accept-source-agreements --accept-package-agreements
+```
+
+**`bc` is no longer a dependency** — the cost delta is computed with `awk`, which is
+present everywhere. Do not add `bc` back: it ships with macOS but not with Git Bash on
+Windows, and it is missing from minimal Linux images too.
+
+```bash
 # ccusage is optional (line 3, expenses) — but if you install it, it MUST be >= 20.
 # On 18.x the bundled price snapshot predates the current models and every figure
 # collapses to $0. Always install the latest, never pin an old major.
@@ -31,16 +51,21 @@ npm install -g ccusage@latest 2>/dev/null || true
 ccusage --version   # verify: must print 20.x or newer
 ```
 
-On Linux: use `apt-get install -y jq bc` or `yum install -y jq bc` instead of `brew`.
-
 If `ccusage --version` reports anything below 20, tell the user line 3 will show `$0` until they upgrade — do not silently proceed.
+
+On Windows npm puts the binary in `~/AppData/Roaming/npm`. If `ccusage --version` says
+`command not found` there while the package installed fine, that folder is not on Git
+Bash's PATH — line 3 stays `—` until it is added.
 
 ### Step 3: Copy the script
 
 ```bash
-cp "$TMPDIR/claude-statusline/statusline.sh" ~/.claude/statusline.sh
+cp "$SRC/statusline.sh" ~/.claude/statusline.sh
 chmod +x ~/.claude/statusline.sh
 ```
+
+No post-copy edits are needed on any platform: the script probes for BSD vs GNU
+`stat`/`date` at startup (`_mtime`, `_days_ago`) and adapts on its own.
 
 ### Step 4: Configure settings.json
 
@@ -55,7 +80,20 @@ The key to add at the top level of the JSON object:
 }
 ```
 
+On **Windows**, write an absolute Git Bash path instead of `~`, which is not guaranteed to
+expand there:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "bash '/c/Users/<USER>/.claude/statusline.sh'"
+}
+```
+
 **CRITICAL: Do NOT overwrite or remove any existing keys in settings.json. Only add/update the `statusLine` key.**
+
+If the user already has a `statusLine` pointing at a different script, tell them which file
+you are replacing it with, and leave their old script on disk — do not delete it.
 
 ### Step 5: Create cache directory
 
@@ -82,8 +120,14 @@ Expected: 3 lines, with line 2 reading `5ч: ◼◻◻◻◻◻◻◻◻◻ 18% 
 Line 3 may show `—` on the first run — that is normal, the cache is cold and ccusage
 fills it in the background (allow ~1 minute, then re-run).
 
-If line 2 shows `5ч: — | Н: —` with that payload, the script failed to parse stdin —
-check that `jq` is on PATH.
+Diagnosing a bad run:
+
+| What you see | Cause |
+|---|---|
+| `jq не найден — статусбар не работает` | `jq` is not on PATH — step 2 was skipped, or the terminal was not restarted after a Windows install |
+| Line 2 reads `5ч: —` and `Н: —` while lines 1 and 3 are fine | Claude Code is too old to send `.rate_limits`, or there is no Pro/Max subscription — see the section below |
+| Line 3 reads `Д: —`, `7д: —`, `30д: —` | `ccusage` is missing, or the cache is still cold (wait ~1 min, re-run) |
+| Line 3 shows `$0` everywhere | `ccusage` is below 20 — upgrade it, do not patch the script |
 
 ### Step 7: Clean up
 
@@ -141,28 +185,29 @@ heavy work must stay behind the `mkdir`-based lock in `_bg_locked`, and:
 
 ## Platform compatibility
 
-| Feature | macOS | Linux |
-|---------|-------|-------|
-| Line 1 (model + context) | Works | Works |
-| Line 2 (rate limits) | Works | Works — reads stdin, no Keychain involved |
-| Line 3 (expenses) | Works | Works after the `date` edits below, if ccusage >= 20 is installed |
+| Feature | macOS | Linux | Windows (Git Bash) |
+|---------|-------|-------|--------------------|
+| Line 1 (model + context) | Works | Works | Works |
+| Line 2 (rate limits) | Works | Works — reads stdin, no Keychain involved | Works |
+| Line 3 (expenses) | Works | Works if ccusage >= 20 | Works if ccusage >= 20 and `~/AppData/Roaming/npm` is on PATH |
 
-On Linux, after copying the script, make these edits in `~/.claude/statusline.sh`:
+Verified on Windows 11 (Git Bash, jq 1.8.2, ccusage 20.0.20) on 2026-08-20: all three
+lines render.
 
-1. Replace all `stat -f %m` with `stat -c %Y`
-2. Replace the BSD `date -v` arithmetic:
-   ```bash
-   # macOS (original):
-   --since "$(date -v-30d +%Y%m%d)"
-   D7=$(date -v-7d +%Y-%m-%d)
+**No per-platform edits to the copied script.** Earlier revisions told you to swap
+`stat -f %m` for `stat -c %Y` and `date -v-30d` for `date -d '30 days ago'` by hand on
+Linux. The script now picks the right flavour itself, and the shims are written the only
+way that actually works in both directions:
 
-   # Linux (replacement):
-   --since "$(date -d '30 days ago' +%Y%m%d)"
-   D7=$(date -d '7 days ago' +%Y-%m-%d)
-   ```
+- `stat` must be **probed once** (`stat -c %Y . &>/dev/null`), never chained. On GNU, `-f`
+  means `--file-system`: `stat -f %m file` prints filesystem info and **exits 0**, so a
+  `stat -f %m || stat -c %Y` chain never falls through, and the caller silently gets
+  garbage where it expected an mtime.
+- `date` may use a chain, because BSD's `-v` fails cleanly on GNU (exit 1, empty stdout):
+  `date -v-"$1"d +"$2" 2>/dev/null || date -d "$1 days ago" +"$2"`.
 
-`taskpolicy` does not exist on Linux — the script already falls back to `nice -n 19` on
-its own, no edit needed.
+`taskpolicy` exists only on macOS — the script already falls back to `nice -n 19` there,
+no edit needed.
 
 ## Customization (if the user asks)
 
@@ -173,3 +218,8 @@ its own, no edit needed.
 - **Add a field**: labels on lines 2-3 are padded with spaces to the width of the longest
   one (`5ч:`) — keep that or the columns drift
 - **Uninstall**: Remove `"statusLine"` from `~/.claude/settings.json`, delete `~/.claude/statusline.sh`
+
+Keep the dependency surface at `jq` (plus optional `ccusage`). If a change seems to need
+`bc`, `gdate`, `coreutils`, or a GNU-only flag, express it with `awk` or the existing
+`_mtime` / `_days_ago` shims instead — every added dependency breaks the one-step install
+for somebody.

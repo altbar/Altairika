@@ -12,6 +12,33 @@ D="$HOME/.claude/cache/statusline"
 NOW=$(date +%s)
 mkdir -p "$D" 2>/dev/null
 
+# ═══════════════════ PLATFORM SHIMS ═══════════════════
+# macOS ships BSD stat/date; Linux and Git Bash on Windows ship the GNU ones, and
+# the flags are not interchangeable. Probe the flavour once — do NOT chain them as
+# `stat -f %m || stat -c %Y`: on GNU, `-f` means --file-system, so it prints
+# filesystem info and exits 0, and the fallback never fires while the caller
+# quietly gets garbage instead of an mtime.
+if stat -c %Y . &>/dev/null; then
+  _mtime() { stat -c %Y "$1" 2>/dev/null || echo 0; }   # GNU (Linux, Git Bash)
+else
+  _mtime() { stat -f %m "$1" 2>/dev/null || echo 0; }   # BSD (macOS)
+fi
+# Here || is safe in the other direction: BSD's -v fails cleanly on GNU date
+# (exit 1, nothing on stdout).
+_days_ago() { date -v-"$1"d +"$2" 2>/dev/null || date -d "$1 days ago" +"$2" 2>/dev/null; }
+
+# jq parses every value on all three lines. Without it the bar renders as `?` and
+# zeros with no hint why — which reads like a broken script, not a missing package.
+if ! command -v jq &>/dev/null; then
+  printf 'jq не найден — статусбар не работает
+'
+  printf '.      | macOS: brew install jq · Linux: apt-get install -y jq
+'
+  printf '.      | Windows: winget install jqlang.jq (и перезапустить терминал)
+'
+  exit 0
+fi
+
 # ═══════════════════ LOCK HELPER ═══════════════════
 # mkdir-based atomic lock — prevents N parallel statusline runs from
 # spawning N copies of ccusage.
@@ -28,7 +55,7 @@ _bg_locked() {
   local name=$1; shift
   local LOCK="$D/$name.lock"
   if [[ -d "$LOCK" ]]; then
-    local age=$(( $(date +%s) - $(stat -f %m "$LOCK" 2>/dev/null || echo 0) ))
+    local age=$(( $(date +%s) - $(_mtime "$LOCK") ))
     (( age > 1800 )) && rmdir "$LOCK" 2>/dev/null
   fi
   (
@@ -129,8 +156,11 @@ else
   PC=${SC:-0}; LR=0
   printf '%s %s\n' "$PC" "$LR" > "$CF"
 fi
-DELTA=$(echo "${SC:-0} - ${PC:-0}" | bc -l 2>/dev/null || echo 0)
-if (( $(echo "${DELTA:-0} > 0.001" | bc -l 2>/dev/null || echo 0) )); then
+# awk, not bc: bc ships with macOS but not with Git Bash on Windows, and is
+# missing from minimal Linux images too. awk is everywhere, and does the same
+# float subtract and compare — one dependency less to install.
+DELTA=$(awk -v a="${SC:-0}" -v b="${PC:-0}" 'BEGIN{printf "%.10f", a-b}' 2>/dev/null || echo 0)
+if awk -v d="${DELTA:-0}" 'BEGIN{exit !(d>0.001)}' 2>/dev/null; then
   LR=$DELTA
   printf '%s %s\n' "${SC:-0}" "$LR" > "$CF"
 fi
@@ -186,7 +216,7 @@ _fetch_exp() {
   # Needs ccusage >= 20: the 18.x snapshot predates Opus 5 / Fable 5 / Sonnet 5,
   # so on that version --offline and LITELLM_PRICING_URL both still yielded $0.
   "${bg[@]}" ccusage daily --json --offline \
-    --since "$(date -v-30d +%Y%m%d)" \
+    --since "$(_days_ago 30 %Y%m%d)" \
     --until "$(date +%Y%m%d)" \
     --mode calculate 2>/dev/null
 }
@@ -207,7 +237,7 @@ _refresh_expenses() {
 EDATA=""
 if [[ -s "$EC" ]]; then
   EDATA=$(cat "$EC" 2>/dev/null)
-  AGE=$(( NOW - $(stat -f %m "$EC" 2>/dev/null || echo 0) ))
+  AGE=$(( NOW - $(_mtime "$EC") ))
   # 15 min, not 60s: the TTL must outlast the run (or the cache expires before it
   # is written and ccusage never stops), and with the daily figure gone from
   # line 3 the 7д/30д totals barely move anyway.
@@ -218,7 +248,7 @@ fi
 
 if [[ -n "${EDATA:-}" ]]; then
   TODAY=$(date +%Y-%m-%d)
-  D7=$(date -v-7d +%Y-%m-%d)
+  D7=$(_days_ago 7 %Y-%m-%d)
 
   # Aggregate: tokens = input + output + cacheCreation (no cacheRead), cost = totalCost.
   # The day key is `period` since ccusage 20 (`date` before it) — accept either,
